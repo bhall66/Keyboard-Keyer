@@ -1,7 +1,7 @@
  /**************************************************************************
       Author:   Bruce E. Hall, w8bh.net
         Date:   26 Aug 2021
-    Hardware:   Seeed XIAO, 128x64 I2C OLED display module
+    Hardware:   Seeeduino XIAO, 128x64 I2C OLED display module
     Software:   Arduino IDE 1.8.13
        Legal:   Copyright (c) 2021  Bruce E. Hall.
                 Open Source under the terms of the MIT License. 

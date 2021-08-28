@@ -1,7 +1,7 @@
  /**************************************************************************
       Author:   Bruce E. Hall, w8bh.net
         Date:   26 Aug 2021
-    Hardware:   Seeed XIAO, PS/2 Keyboard
+    Hardware:   Seeeduino XIAO, PS/2 Keyboard
     Software:   Arduino IDE 1.8.13
        Legal:   Copyright (c) 2021  Bruce E. Hall.
                 Open Source under the terms of the MIT License. 
