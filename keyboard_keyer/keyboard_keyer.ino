@@ -1,7 +1,7 @@
 
  /**************************************************************************
       Author:   Bruce E. Hall, w8bh.net
-        Date:   26 Aug 2021
+        Date:   29 Aug 2021
     Hardware:   Seeeduino XIAO, 128x64 I2C OLED display, PS/2 Keyboard
     Software:   Arduino IDE 1.8.13, EasyKey library
        Legal:   Copyright (c) 2021  Bruce E. Hall.
@@ -23,7 +23,7 @@
 //===================================  XIAO Data Pin Connections ======================
 #define CLOCK_PIN        0                   // PS/2 keyboard clock pin
 #define DATA_PIN         1                   // PS/2 keyboard data pin
-#define KEYER            3                   // pin for Morse key output
+#define KEYER            2                   // pin for Morse key output
 #define SDA              4                   // to OLED display "SDA"
 #define SCL              5                   // to OLED display "SCL"
 #define AUDIO            9                   // pin attached to piezo element
@@ -35,6 +35,7 @@
 #define SCREEN_ADDRESS   0x3C                // OLED display address, in hex
 
 //===================================  Morse Code Constants =============================
+#define VERSION          "v1.0"              // software version of this sketch
 #define CODESPEED        20                  // default speed in Words per Minute
 #define MINSPEED         5                   // lowest code speed
 #define MAXSPEED         50                  // highest code speed
@@ -43,9 +44,14 @@
 #define MAXPITCH         2500                // highest audio pitch
 #define AUDIO_ON         true                // if true, speaker is active on startup
 #define LED_ON           true                // if true, user LED active on startup
-#define MACRO_PAUSE      '*'                 // character used for pausing a macro
+#define PAUSE_TOKEN      '*'                 // character used for pausing a macro
+#define CALL_TOKEN       '`'                 // call substitution character
+#define NAME_TOKEN       '~'                 // name substitution character
+#define COUNT_TOKEN      '#'                 // qso counter substitution character
 #define MACRO_NUM        12                  // number of text macros
 #define MACRO_LENGTH     100                 // number of characters per macro + 1
+#define SHORT_SERIAL     false               // if true, send serial<100 as 2 digits
+#define LEADING_T        false               // if true, send leading zero as T
 
 //===================================  Default Text Macros =============================
 // Specify the default text macros below.
@@ -53,8 +59,8 @@
 
 //string length "         |10       |20       |30       |40       |50       |60       |70       |80       |90       "
 #define MSG_F1  "CQ CQ CQ de W8BH W8BH K" 
-#define MSG_F2  "TNX fer call= UR RST is *= Name is Bruce Bruce es QTH is Dayton OH ? Dayton OH="
-#define MSG_F3  ""
+#define MSG_F2  "TNX fer call= UR RST *= Name Bruce Bruce es QTH Dayton OH ? Dayton OH= Hw Cpy? ~ de W8BH KN"
+#define MSG_F3  "5NN #"
 #define MSG_F4  ""
 #define MSG_F5  ""
 #define MSG_F6  "Rig is Elecraft K3 es Ant is Vertical ="
@@ -62,8 +68,8 @@
 #define MSG_F8  ""
 #define MSG_F9  ""
 #define MSG_F10 ""
-#define MSG_F11 ""
-#define MSG_F12 "de W8BH KN"
+#define MSG_F11 "TESTING 123"
+#define MSG_F12 "~ de W8BH KN"
   
 //===================================  Global variables =============================
 EasyKey kbd;
@@ -76,6 +82,7 @@ typedef struct {                             // Data to be stored in flash goes 
   bool ledOn;                                // if true, morse output goes to user LED
   bool audioOn;                              // if true, morse output goes to speaker
   int  fontSize;                             // currently limited to size 2 or 3
+  int  qCount;                               // qso counter (contest serial number)
   char msg[MACRO_NUM][MACRO_LENGTH];         // 12 CW memories of 99 characters each
 } FlashObject;
 
@@ -86,6 +93,8 @@ int  ditPeriod;                              // length of a dit, in microseconds
 int  x=-1,y=0;                               // character position on screen
 char scn[10][3];                             // character buffer for screen
 bool keyerOn = true;                         // if true, morse output goes to keyer
+char call[12] = "";                          // other ham's callsign
+char name[20] = "";                          // other ham's name
 
 const byte morse[] = {                       // Each character is encoded into an 8-bit byte:
   0b01001010,        // ! exclamation        // Some punctuation not commonly used
@@ -95,9 +104,9 @@ const byte morse[] = {                       // Each character is encoded into a
   0b00000000,        // % percent
   0b00111101,        // & ampersand
   0b01100001,        // ' apostrophe
-  0b00110010,        // ( open paren
+  0b00110010,        // ( open paren or ~KN
   0b01010010,        // ) close paren
-  0b01010111,        // * ~SK                       
+  0b01010111,        // * asterisk or ~SK                       
   0b00110101,        // + plus or ~AR
   0b01001100,        // , comma
   0b01011110,        // - hypen
@@ -265,20 +274,21 @@ void setCodeSpeed(int speed) {
 
 void showStatus() {                          // redraw status bar at top of screen
    led.setTextSize(1);                       // status bar uses tiny text
-   led.setCursor(80,2);                      // position speed at top/right
-   led.print(f.codeSpeed);                   // show current morse speed
-   led.print(" wpm ");                       // and words/minute unit
-
    led.setCursor(2,2);                       // position of Audio icon
    if (f.audioOn) led.print('A');            // On = show an 'A'
    else led.print(' ');                      // Off = no 'A'
-
    led.setCursor(20,2);                      // positon of LED icon
    led.fillRect(20,2,8,8,BLACK);             // erase previous icon
    if (f.ledOn) 
      led.fillRect(20,2,8,8,WHITE);           // On = filled square
    else led.drawRect(20,2,8,8,WHITE);        // Off = open square
-
+   led.setCursor(40,2);                      // position qso count
+   led.print('#');                           // show "#", followed by number
+   led.print(f.qCount);                      // followed by number
+   led.print("  ");                          // clear previous entry
+   led.setCursor(85,2);                      // position speed at top/right
+   led.print(f.codeSpeed);                   // show current morse speed
+   led.print(" wpm ");                       // and words/minute unit
    led.display();                            // now show all changes
 }
 
@@ -316,16 +326,23 @@ void sendCharacter(char c) {                 // send a single character
 }
 
 void sendString (char *ptr) {             
-  while (*ptr) {                             // send the entire string
-    
-     if (*ptr==MACRO_PAUSE) {                // '*' = pause for keyboard entry
+  while (*ptr) {                             // send the entire string, as follows:
+     if (*ptr==PAUSE_TOKEN) {                // character is a pause for keyboard entry
        char c=0;                             // get user input
-       while (c!=MACRO_PAUSE) {              // until user types PAUSE character
+       while (c!=PAUSE_TOKEN) {              // until user types PAUSE character
          if (isChar(c))                      // for regular characters,
             sendCharacter(c);                // display and send them.
          c = kbd.read();                     // get next keyboard character
        }  //while                            // user input done, back to macro!
       
+     } else if (*ptr==CALL_TOKEN) {          // this character is callsign marker
+         sendString(call);                   // so send callsign
+     } else if (*ptr==NAME_TOKEN) {          // this char is name marker 
+         sendString(name);                   // so send name
+     } else if (*ptr==COUNT_TOKEN) {         // this char is qso counter marker
+         sendSerial();                       // so send current count,
+         f.qCount++;                         // auto increment count,
+         showStatus();                       // and show new count on status bar
      } else {
          sendCharacter(*ptr);                // show&send next character in macro
          if (kbd.available()) {              // check keyboard while sending
@@ -385,6 +402,28 @@ int getInteger(char* s) {                    // from user via keyboard input
   return value;
 }
 
+void sendDigit(int digit) {
+  if ((digit>=0)&&(digit<=9))                // must be 0..9
+    sendCharacter('0'+digit);                // convert to char & send it.
+}
+
+void sendSerial() {                          // SEND QSO COUNT (3 digits)
+  int temp = f.qCount;                       // create temporary variable
+  int hundreds = temp/100;                   // get hundreds digit
+  temp -= hundreds*100;                      // remove hundreds digit
+  int tens = temp/10;                        // get tens digit
+  temp -= tens*10;                           // get ones digit
+  if ((f.qCount>99)||(!SHORT_SERIAL)) {      // need to send hundreds digit?
+    if ((hundreds==0)&&(LEADING_T))          // check for leading T         
+      sendCharacter('T');                    // send hundreds leading T
+    else sendDigit(hundreds);                // otherwise send hundreds digit
+  }
+  if ((f.qCount<10)&&(LEADING_T))            // leading T for tens spot?
+    sendCharacter('T');                      // send leading T    
+  else sendDigit(tens);                      // otherwise send tens digit
+  sendDigit(temp);                           // send ones digit
+}
+
 void setPitch() {
   char c = 0;                                // character received from kbd
   int value = f.pitch;                       // start with current pitch
@@ -420,6 +459,22 @@ void setPitch() {
   roger();
 }
 
+void getString(char *s, int maxLen) {
+  int len =0;  
+  char c=0;
+  while ((len<=maxLen)&&(c!=PS2_ENTER)) {    // stop input on enter key
+    c = toupper(kbd.read());                 // get keyboard character
+    if (isChar(c)) {                         // consider only regular characters    
+        click();                             // audible response
+        addCharToScreen(c);                  // show latest character
+        s[len++] = c;                        // and add it to the string
+    }
+  } // while
+  s[len]=0;                                  // add terminating /0
+  homeScreen();
+  roger();
+}
+
 void setMacro() {
   char s[MACRO_LENGTH] = "";                 // start with empty string.
   int len =0;                                // current length of macro
@@ -441,12 +496,13 @@ void setMacro() {
   roger();
 }
 
-void setDefaults() {
+void setDefaults() {                         // Reset all user settings to defaults
   f.pitch = PITCH;                           // frequency of audio output
   f.codeSpeed = CODESPEED;                   // current morse speed, in words/minute
   f.ledOn = LED_ON;                          // if true, morse output goes to user LED
   f.audioOn = AUDIO_ON;                      // if true, morse output goes to speaker
   f.fontSize = 2;                            // currently limited to 2 or 3
+  f.qCount = 1;                              // start qso counter at 1
   strcpy(f.msg[0],MSG_F1);                   // initialize the CW messages F1..F12
   strcpy(f.msg[1],MSG_F2);
   strcpy(f.msg[2],MSG_F3);
@@ -461,12 +517,12 @@ void setDefaults() {
   strcpy(f.msg[11],MSG_F12);
 }
 
-void loadParams() {
+void loadParams() {                          // LOAD USER SETTINGS FROM FLASH
   f = flash.read();                          // get all macros & settings from flash
   if (!f.valid) setDefaults();               // not saved yet, so use defaults instead
 }
 
-void saveParams() {
+void saveParams() {                          // SAVE USER SETTINGS TO FLASH
   message("SAVING"); roger();                // inform user going to save settings now
   f.valid = true;                            // flag the flash contents as valid data
   flash.write(f);                            // and save the settings.
@@ -486,6 +542,11 @@ void toggleAudio() {
   else message("AUDIO OFF");   
 }
 
+void toggleText() {                          // TOGGLER SCREEN TEXT SIZE
+  f.fontSize = (f.fontSize==3)?2:3;          // toggle between 2 & 3                           
+  showReady();                               // and show what it looks like
+}
+
 void speedUp() {                             // INCREASE MORSE SPEED:
   int i = f.codeSpeed;                       // get current speed
   if (i<MAXSPEED) {                          // if less than maximum,                              
@@ -502,16 +563,58 @@ void slowDown() {                            // DECRESE MORSE SPEED:
   }  
 }
 
-void textSize(int i) {                       // SET SCREEN TEXT SIZE
-  f.fontSize=i;                              // do it
-  showReady();                               // and show what it looks like
+void showSpeed() {                           // SHOW WPM CODESPEED
+  char s[4];                                 // if you cant read the statusbar!
+  itoa(f.codeSpeed,s,10);                    // convert int to string
+  message(s);                                // and show it to the OM
+}
+
+void decSerial() {                           // DECREASE QSO COUNTER
+  if (f.qCount>1) {                          // dont go below 1
+    f.qCount--;                              // do it
+    showStatus();                            // show it
+    click();                                 // give audio feedback
+  }
+}
+
+void incSerial() {                           // INCREASE QSO COUNTER
+  f.qCount++;                                // do it
+  showStatus();                              // show it
+  click();                                   // give audio feedback
+  name[0]=0; call[0]=0;                      // erase name and call.
+}
+
+void setSerial() {                           // SET QSO COUNTER
+  int i = getInteger("QSO #?");              // ask for number
+  if (i==0) i=1;                             // if no input, start at 1
+  if (i>999) i=1;                            // keep # less than 1000
+  f.qCount = i;                              // update qso counter
+  showStatus();                              // show new value on status bar
+  roger();                                   // acknowledge update
 }
 
 void setTone() {                             // SET AUDIO TONE
   f.pitch = getInteger("TONE?");             // ask for value in Hz
-  homeScreen();                              // clear text input
   roger();                                   // and sound it out with 'r'
 }
+
+void getCall() {                             // get a callsign from user        
+  message("Call?");
+  getString(call,12);                        
+}
+
+void getName() {                             // get a name from user
+  message("Name?");
+  getString(name,20);                        
+}
+
+void reset() {                               // USER WANTS TO RESET
+  message("Reset");                         
+  setDefaults();                             // use all default params
+  showStatus();                              // update status bar
+  roger();                                   // and demo new pitch & speed
+}
+
 
 void setup()   {   
   kbd.begin(DATA_PIN, CLOCK_PIN);            // initialize PS/2 keyboard         
@@ -540,20 +643,32 @@ void loop() {                                // THIS IS THE SKETCH:
       case PS2_ENTER:       homeScreen();  break;
       case PS2_HOME:        homeScreen();  break;
       case PS2_ESC:         homeScreen();  break;
+      case PS2_END:         incSerial();   break;
       case PS2_PAGEUP:      toggleAudio(); break;
       case PS2_PAGEDOWN:    toggleLED();   break;
-      case PS2_LEFTARROW:   textSize(2);   break;
-      case PS2_RIGHTARROW:  textSize(3);   break;
+      case PS2_LEFTARROW:   decSerial();   break;
+      case PS2_RIGHTARROW:  incSerial();   break;
       case PS2_UPARROW:     speedUp();     break;
       case PS2_DOWNARROW:   slowDown();    break; 
       case PS2_CTRL_A:      toggleAudio(); break;
+      case PS2_CTRL_C:      getCall();     break;
       case PS2_CTRL_F:      setMacro();    break;
       case PS2_CTRL_L:      toggleLED();   break;
+      case PS2_CTRL_N:      getName();     break;
+      case PS2_CTRL_O:      toggleText();  break;
       case PS2_CTRL_P:      setPitch();    break;
+      case PS2_CTRL_Q:      setSerial();   break;
+      case PS2_CTRL_R:      reset();       break;
       case PS2_CTRL_S:      saveParams();  break;
       case PS2_CTRL_T:      setTone();     break;
+      case PS2_CTRL_W:      showSpeed();   break;
+      case PS2_CTRL_V:      message(VERSION); break;
       default:
         if (isFKey(c)) sendMacro(c-PS2_F1);  // then check if key is a fn key.
+        else if (c==CALL_TOKEN)              // shortcut key for name
+          sendString(call);
+        else if (c==NAME_TOKEN)              // shortcut key for callsign
+          sendString(name);
         else sendCharacter(c);               // nope, just a regular character. 
     }
   }
