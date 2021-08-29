@@ -59,9 +59,9 @@
 
 //string length "         |10       |20       |30       |40       |50       |60       |70       |80       |90       "
 #define MSG_F1  "CQ CQ CQ de W8BH W8BH K" 
-#define MSG_F2  "TNX fer call= UR RST *= Name Bruce Bruce es QTH Dayton OH ? Dayton OH= Hw Cpy? ~ de W8BH KN"
+#define MSG_F2  "TNX fer call= UR RST *= Name Bruce Bruce es QTH Dayton OH ? Dayton OH= HW CPY? ` de W8BH ("
 #define MSG_F3  "5NN #"
-#define MSG_F4  ""
+#define MSG_F4  "W8BH"
 #define MSG_F5  ""
 #define MSG_F6  "Rig is Elecraft K3 es Ant is Vertical ="
 #define MSG_F7  ""
@@ -69,7 +69,7 @@
 #define MSG_F9  ""
 #define MSG_F10 ""
 #define MSG_F11 "TESTING 123"
-#define MSG_F12 "~ de W8BH KN"
+#define MSG_F12 "` de W8BH ("
   
 //===================================  Global variables =============================
 EasyKey kbd;
@@ -498,7 +498,7 @@ void setMacro() {
 
 void setDefaults() {                         // Reset all user settings to defaults
   f.pitch = PITCH;                           // frequency of audio output
-  f.codeSpeed = CODESPEED;                   // current morse speed, in words/minute
+  setCodeSpeed(CODESPEED);                   // current morse speed, in words/minute
   f.ledOn = LED_ON;                          // if true, morse output goes to user LED
   f.audioOn = AUDIO_ON;                      // if true, morse output goes to speaker
   f.fontSize = 2;                            // currently limited to 2 or 3
@@ -520,6 +520,7 @@ void setDefaults() {                         // Reset all user settings to defau
 void loadParams() {                          // LOAD USER SETTINGS FROM FLASH
   f = flash.read();                          // get all macros & settings from flash
   if (!f.valid) setDefaults();               // not saved yet, so use defaults instead
+  setCodeSpeed(f.codeSpeed);                 // change speed to saved value
 }
 
 void saveParams() {                          // SAVE USER SETTINGS TO FLASH
@@ -631,7 +632,6 @@ void setup()   {
   pinMode(KEYER,OUTPUT);                     // allow control of Morse Output
   digitalWrite(KEYER,0);                     // turn off Morse output                 
   loadParams();                              // get stored variables
-  setCodeSpeed(f.codeSpeed);                 // set Morse speed
   showReady();                               // quick startup message
 }
 
