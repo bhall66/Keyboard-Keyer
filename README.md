@@ -1,6 +1,6 @@
 # Keyboard Keyer
 ![image](./pcb/BN35_render.JPG)
-Build your own Keyboard-to-Morse Code interface for $20 or less, using a PS/2 keyboard.  Connect it to your rig via onboard photocoupler, or use it standalone for Morse Code practice.  A desription of the complete project, including tutorials, schematic, circuit board, builder's guide, and users's guide, can be found at w8bh.net/KeyboardKeyer.pdf
+Build your own Keyboard-to-Morse Code interface for $20 or less, using a PS/2 keyboard.  Connect it to your rig via onboard photocoupler, or use it standalone for Morse Code practice.  A desription of the complete project, including tutorials, schematic, circuit board, builder's guide, and user's guide, can be found at w8bh.net/KeyboardKeyer.pdf
 
 
 ## Folders
