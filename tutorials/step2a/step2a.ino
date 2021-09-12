@@ -1,6 +1,6 @@
  /**************************************************************************
       Author:   Bruce E. Hall, w8bh.net
-        Date:   24 Aug 2021
+        Date:   10 Sep 2021
     Hardware:   Seeeduino XIAO
     Software:   Arduino IDE 1.8.13
        Legal:   Copyright (c) 2021  Bruce E. Hall.
@@ -23,7 +23,7 @@ void setup() {
   pinMode(LED_BUILTIN,OUTPUT);
 }
 
-void loop() {                             // HERES WHRE IT ALL HAPPENS:
+void loop() {                             // HERES WHERE IT ALL HAPPENS:
   dit(); dit(); dit();                    // send 'S' in Morse
   delay(2000);                            // repeat every 2 seconds
 }
