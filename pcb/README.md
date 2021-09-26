@@ -1,2 +1,2 @@
-BN35.zip contains the gerber files for the rev1 board. 
-![image](BN35_render.JPG)
+BN41.zip contains the gerber files for the rev2 board. 
+![image](BN41_render.jpg)
